@@ -19,6 +19,7 @@ from betsi.utils import *
 from pprint import pprint
 from scipy.interpolate import splrep, pchip_interpolate
 matplotlib.use('Qt5Agg')
+#matplotlib.use('agg') # do not print plots new Qt windows
 
 ##NITROGEN_RADIUS = 1.62E-19
 ##NITROGEN_MOL_VOL = 44.64117195
@@ -407,27 +408,30 @@ def analyse_file(input_file, output_dir=None, **kwargs):
     # Compute unfiltered results
     pressure, q_adsorbed, comments_to_data = get_data(input_file=input_file)
     betsi_unfiltered = BETResult(pressure, q_adsorbed)
-
+    betsi_unfiltered.original_pressure_data = pressure
+    betsi_unfiltered.original_q_adsorbed_data = q_adsorbed
+    betsi_unfiltered.comments_to_data = comments_to_data
     # Apply custom filters:
     betsi_filtered = BETFilterAppliedResults(betsi_unfiltered, **kwargs)
 
     # Export the results
     betsi_filtered.export(output_subdir)
-
-    # Create and save a PDF plot
-    fig = create_matrix_plot(betsi_filtered, name=input_file.stem)
-
-    #fig.tight_layout(pad=0.3, rect=[0, 0, 1, 0.95])
-    fig.savefig(
-        str(output_subdir / f'{input_file.stem}_combined_plot.pdf'), bbox_inches='tight')
-    #plt.tight_layout()
-    plt.show()
     
-    # Create and show Diagnostics plot
-    fig_2 = regression_diagnostics_plots(betsi_filtered,name=input_file.stem)
-    fig_2.tight_layout(pad=.3, rect=[0,0,1,.95])
-    plt.show()
+    # Create and save a PDF plot
+    # Do not display plots in multiple Qt windows
+    with matplotlib.rc_context({'interactive': False}):
+        fig = create_matrix_plot(betsi_filtered,kwargs['use_rouq3'],kwargs['use_rouq4'],name=input_file.stem,)
+        #fig.tight_layout(pad=0.3, rect=[0, 0, 1, 0.95])
+        fig.savefig(
+            str(output_subdir / f'{input_file.stem}_combined_plot.pdf'), bbox_inches='tight')
+        #plt.tight_layout()
+        #plt.show()
 
+        # Create and show Diagnostics plot
+        fig_2 = regression_diagnostics_plots(betsi_filtered,name=input_file.stem)
+        fig_2.tight_layout(pad=.3, rect=[0,0,1,.95])
+        fig_2.savefig(str(output_subdir / f'{input_file.stem}_RD_plots.pdf'))
+        #plt.show()
 
 if __name__ == "__main__":
     analyse_file(
