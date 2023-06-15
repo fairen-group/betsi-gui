@@ -596,16 +596,18 @@ class BETSI_widget(QWidget):
         
         ## New lines added
         ##csv_paths = Path(dir_path).glob('*.csv')
-        csv_paths = Path(dir_path).glob('*.csv')
-        aif_paths = Path(dir_path).glob('*.aif')
-        txt_paths = Path(dir_path).glob('*.txt')
-        input_file_paths = (*csv_paths, *aif_paths, txt_paths)
+        #csv_paths = Path(dir_path).glob('*.csv')
+        #aif_paths = Path(dir_path).glob('*.aif')
+        #txt_paths = Path(dir_path).glob('*.txt')
+        #input_file_paths = (*csv_paths, *aif_paths, txt_paths)
+        input_file_paths = (*Path(dir_path).glob('*.csv'),
+                            *Path(dir_path).glob('*.aif'),
+                            *Path(dir_path).glob('*.txt'))
 
         ##for file_path in csv_paths:
         for file_path in input_file_paths:
             # Update the table with current file
             self.populate_table(csv_path=str(file_path))
-
             # Run the analysis
             analyse_file(input_file=str(file_path),
                          output_dir=self.output_dir,
@@ -620,6 +622,7 @@ class BETSI_widget(QWidget):
                          adsorbate=adsorbate,
                          cross_sectional_area=cross_sectional_area,
                          molar_volume=molar_volume)
+        print(f"BET analysis on {len(input_file_paths)} input files terminated.")
 
     def set_defaults(self):
         """Sets the widget to default state
