@@ -132,6 +132,7 @@ class BETSI_gui(QMainWindow):
         self.betsi_widget.clear()
 
     def replot_betsi(self):
+        print(self.betsi_widget.warning_widget)
         self.betsi_widget.display_plot = True
         self.betsi_widget.run_calculation()
 
@@ -366,9 +367,6 @@ class BETSI_widget(QWidget):
 
         self.setLayout(main_layout)
 
-        # Warnings are printed in widgets by default
-        self.warning_widget = True
-
     def set_output_dir(self):
         """Defines the output directory of the BETSI analysis"""
         dir_path = QFileDialog.getExistingDirectory(
@@ -546,7 +544,8 @@ class BETSI_widget(QWidget):
             
     def show_dialog(self, warnings, information):
         # Log the warnings
-        if ~self.warning_widget:
+        print(self.warning_widget)
+        if self.warning_widget is False:
             print(f'\n{warnings}{information}\n')
             # Create a local sub-directory for log if not already done.
             target_path = Path(self.target_filepath)
@@ -554,27 +553,27 @@ class BETSI_widget(QWidget):
             output_subdir.mkdir(exist_ok=True)
             with (output_subdir / 'warnings.log').open('w') as fp:
                 print(f'\n{warnings}{information}\n',file=fp)
-            return
-        dialog = QMessageBox()
-        dialog.setText(warnings)
-        dialog.setWindowTitle('Warnings')
-        if warnings.find("No valid areas found!") != -1:
-            dialog.setIcon(QMessageBox().Critical)
-            dialog.setStandardButtons(QMessageBox.Ok)
-            dialog.addButton("Clear", QMessageBox.AcceptRole)
-            if information != "":
-                information += "\n\nPress \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
+        else :
+            dialog = QMessageBox()
+            dialog.setText(warnings)
+            dialog.setWindowTitle('Warnings')
+            if warnings.find("No valid areas found!") != -1:
+                dialog.setIcon(QMessageBox().Critical)
+                dialog.setStandardButtons(QMessageBox.Ok)
+                dialog.addButton("Clear", QMessageBox.AcceptRole)
+                if information != "":
+                    information += "\n\nPress \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
+                else:
+                    information = "Press \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
+            elif warnings.find("You must provide a") != -1:
+                dialog.setIcon(QMessageBox().Critical)
+                dialog.addButton("Clear", QMessageBox.AcceptRole)
             else:
-                information = "Press \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
-        elif warnings.find("You must provide a") != -1:
-            dialog.setIcon(QMessageBox().Critical)
-            dialog.addButton("Clear", QMessageBox.AcceptRole)
-        else:
-            dialog.setIcon(QMessageBox().Warning)
-        dialog.setInformativeText(information)
-        
-        dialog.buttonClicked.connect(self.dialog_clicked)
-        dialog.exec_()
+                dialog.setIcon(QMessageBox().Warning)
+            dialog.setInformativeText(information)
+            
+            dialog.buttonClicked.connect(self.dialog_clicked)
+            dialog.exec_()
 
     def dialog_clicked(self, dialog_button):
         if dialog_button.text() == "Clear":
@@ -609,11 +608,11 @@ class BETSI_widget(QWidget):
         input_file_paths = (*Path(dir_path).glob('*.csv'),
                             *Path(dir_path).glob('*.aif'),
                             *Path(dir_path).glob('*.txt'))
-        self.warning_widget = False
         for file_path in input_file_paths:
             print(f"\nReading file {file_path}.\n")
             self.target_filepath = file_path
             self.display_plot = False
+            self.warning_widget = False
             self.run_calculation()
             self.export()
             self.clear()
@@ -672,6 +671,9 @@ class BETSI_widget(QWidget):
 
         # if there is a figure, replot
         self.plot_bet()
+
+        # Display warnings
+        self.warning_widget = True
 
     def clear(self):
         """Closes all plots and removes all data from memory"""
