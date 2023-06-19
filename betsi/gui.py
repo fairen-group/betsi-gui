@@ -544,7 +544,6 @@ class BETSI_widget(QWidget):
             
     def show_dialog(self, warnings, information):
         # Log the warnings
-        print(self.warning_widget)
         if self.warning_widget is False:
             print(f'\n{warnings}{information}\n')
             # Create a local sub-directory for log if not already done.
