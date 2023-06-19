@@ -132,7 +132,6 @@ class BETSI_gui(QMainWindow):
         self.betsi_widget.clear()
 
     def replot_betsi(self):
-        print(self.betsi_widget.warning_widget)
         self.betsi_widget.display_plot = True
         self.betsi_widget.run_calculation()
 
