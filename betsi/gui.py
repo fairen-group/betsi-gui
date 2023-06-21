@@ -14,6 +14,8 @@ import sys
 
 import traceback
 
+import signal
+
 # core lib
 plt.ion()
 from betsi.lib import *
@@ -549,7 +551,7 @@ class BETSI_widget(QWidget):
             target_path = Path(self.target_filepath)
             output_subdir = Path(self.output_dir) / target_path.name
             output_subdir.mkdir(exist_ok=True)
-            with (output_subdir / 'warnings.log').open('w') as fp:
+            with (output_subdir / 'log_warnings_errors.txt').open('w') as fp:
                 print(f'\n{warnings}{information}\n',file=fp)
         else :
             dialog = QMessageBox()
@@ -611,7 +613,24 @@ class BETSI_widget(QWidget):
             self.target_filepath = file_path
             self.display_plot = False
             self.warning_widget = False
-            self.run_calculation()
+            #self.run_calculation()
+            # Set the signal alarm to raise a TimeoutError after 30 seconds
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(30) 
+            try :
+                self.run_calculation()
+                signal.alarm(0)  # Cancel the alarm if the calculation finishes within the time limit
+            except CalculationTimeoutError:
+                # Handle the timeout error
+                print("The calculation took too long to complete.")
+                errors = "Consider the following error(s):\n"
+                information = "The calculation took too long to complete."
+                self.show_dialog(errors, information)
+            except Exception as e:
+                # Traceback the error in a file and avoid shut down
+                errors = "Consider the following error(s):\n"
+                information = traceback.format_exc()
+                self.show_dialog(errors, information)
             self.export()
             self.clear()
 
@@ -940,6 +959,12 @@ class OutLog(logging.Handler):
         self.out_widget.moveCursor(QtGui.QTextCursor.End)
         self.out_widget.insertPlainText(m)
 
+
+class CalculationTimeoutError(Exception):
+    pass
+
+def timeout_handler(signum, frame):
+    raise CalculationTimeoutError("The calculation timed out.")
 
 def runbetsi():
     QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)
