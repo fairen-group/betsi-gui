@@ -14,6 +14,8 @@ import sys
 
 import traceback
 
+import signal
+
 # core lib
 plt.ion()
 from betsi.lib import *
@@ -132,6 +134,7 @@ class BETSI_gui(QMainWindow):
         self.betsi_widget.clear()
 
     def replot_betsi(self):
+        self.betsi_widget.display_plot = True
         self.betsi_widget.run_calculation()
 
     def trigger_betsimagic(self, state):
@@ -397,9 +400,12 @@ class BETSI_widget(QWidget):
             if self.current_fig is not None and not plt.fignum_exists(self.current_fig.number):
                 self.current_fig = None
                 self.current_fig_2 = None
-            fig = create_matrix_plot(self.bet_filter_result, self.rouq3_tick.isChecked(), self.rouq4_tick.isChecked(),  name=Path(
+
+            # Initialize plots
+            with matplotlib.rc_context({'interactive': self.display_plot}):
+                fig = create_matrix_plot(self.bet_filter_result, self.rouq3_tick.isChecked(), self.rouq4_tick.isChecked(),  name=Path(
                 self.target_filepath).stem,  fig=self.current_fig)
-            fig_2 = regression_diagnostics_plots(self.bet_filter_result, name=Path(
+                fig_2 = regression_diagnostics_plots(self.bet_filter_result, name=Path(
                 self.target_filepath).stem, fig_2=self.current_fig_2)
             # connect the picker event to the figure
             if self.current_fig is None:
@@ -464,7 +470,6 @@ class BETSI_widget(QWidget):
                                                          adsorbate=adsorbate, 
                                                          cross_sectional_area=cross_sectional_area,
                                                          molar_volume=molar_volume)
-        
         ## Adds interpolated points to adsorption data if no valid area was found by the original data
         if not self.bet_filter_result.has_valid_areas:
             iter_num = 0
@@ -517,7 +522,8 @@ class BETSI_widget(QWidget):
             information += "- Relative pressure point(s) above 1.0 have been removed from the data.\n"
         if self.bet_object.comments_to_data['interpolated_points_added']:
             warnings += "- No valid areas found with the chosen minimum number of points! So, interpolated points are added to the data!\n"
-        
+
+        ## Create plots and print display warnings
         if self.bet_filter_result.has_valid_areas:
             self.plot_bet()
             if warnings != "":
@@ -538,26 +544,36 @@ class BETSI_widget(QWidget):
     
             
     def show_dialog(self, warnings, information):
-        dialog = QMessageBox()
-        dialog.setText(warnings)
-        dialog.setWindowTitle('Warnings')
-        if warnings.find("No valid areas found!") != -1:
-            dialog.setIcon(QMessageBox().Critical)
-            dialog.setStandardButtons(QMessageBox.Ok)
-            dialog.addButton("Clear", QMessageBox.AcceptRole)
-            if information != "":
-                information += "\n\nPress \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
+        # Log the warnings
+        if self.warning_widget is False:
+            print(f'\n{warnings}{information}\n')
+            # Create a local sub-directory for log if not already done.
+            target_path = Path(self.target_filepath)
+            output_subdir = Path(self.output_dir) / target_path.name
+            output_subdir.mkdir(exist_ok=True)
+            with (output_subdir / 'log_warnings_errors.txt').open('w') as fp:
+                print(f'\n{warnings}{information}\n',file=fp)
+        else :
+            dialog = QMessageBox()
+            dialog.setText(warnings)
+            dialog.setWindowTitle('Warnings')
+            if warnings.find("No valid areas found!") != -1:
+                dialog.setIcon(QMessageBox().Critical)
+                dialog.setStandardButtons(QMessageBox.Ok)
+                dialog.addButton("Clear", QMessageBox.AcceptRole)
+                if information != "":
+                    information += "\n\nPress \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
+                else:
+                    information = "Press \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
+            elif warnings.find("You must provide a") != -1:
+                dialog.setIcon(QMessageBox().Critical)
+                dialog.addButton("Clear", QMessageBox.AcceptRole)
             else:
-                information = "Press \"Clear\" if you want to clear input data, reset to default values and start over with a new set of data.\n"
-        elif warnings.find("You must provide a") != -1:
-            dialog.setIcon(QMessageBox().Critical)
-            dialog.addButton("Clear", QMessageBox.AcceptRole)
-        else:
-            dialog.setIcon(QMessageBox().Warning)
-        dialog.setInformativeText(information)
-        
-        dialog.buttonClicked.connect(self.dialog_clicked)
-        dialog.exec_()
+                dialog.setIcon(QMessageBox().Warning)
+            dialog.setInformativeText(information)
+            
+            dialog.buttonClicked.connect(self.dialog_clicked)
+            dialog.exec_()
 
     def dialog_clicked(self, dialog_button):
         if dialog_button.text() == "Clear":
@@ -579,56 +595,46 @@ class BETSI_widget(QWidget):
             target_path = Path(self.target_filepath)
             output_subdir = Path(self.output_dir) / target_path.name
             output_subdir.mkdir(exist_ok=True)
-
             self.bet_filter_result.export(output_subdir)
-
             self.current_fig.savefig(str(output_subdir / f'{target_path.stem}_plot.pdf'), bbox_inches='tight')
-            plt.show()
+            if self.display_plot:
+                plt.show()
             self.current_fig_2.savefig(str(output_subdir / f'{target_path.stem}_RD_plots.pdf'))
-            plt.show()
+            if self.display_plot:
+                plt.show()
 
     def analyse_directory(self, dir_path):
         """ Run BETSI on all csv files within dir_path. Use current filter config."""
-        use_rouq1 = self.rouq1_tick.isChecked()
-        use_rouq2 = self.rouq2_tick.isChecked()
-        use_rouq3 = self.rouq3_tick.isChecked()
-        use_rouq4 = self.rouq4_tick.isChecked()
-        use_rouq5 = self.rouq5_tick.isChecked()
-        min_num_points = int(self.min_points_edit.text())
-        min_r2 = float(self.minr2_edit.text())
-        max_perc_error = float(self.rouq4_edit.text())
-        
-        adsorbate = self.adsorbate_combo_box.currentText()
-        cross_sectional_area = float(self.adsorbate_cross_section_edit.text())
-        molar_volume = float(self.adsorbate_molar_volume_edit.text())
-        
-        
-        ##csv_paths = Path(dir_path).glob('*.csv')
-        csv_paths = Path(dir_path).glob('*.csv')
-        aif_paths = Path(dir_path).glob('*.aif')
-        txt_paths = Path(dir_path).glob('*.txt')
-        XLS_paths = Path(dir_path).glob('*.XLS')
-        input_file_paths = (*csv_paths, *aif_paths, *txt_paths, *XLS_paths)
-
-        ##for file_path in csv_paths:
+        input_file_paths = (*Path(dir_path).glob('*.csv'),
+                            *Path(dir_path).glob('*.aif'),
+                            *Path(dir_path).glob('*.txt'))
         for file_path in input_file_paths:
-            # Update the table with current file
-            self.populate_table(csv_path=str(file_path))
+            print(f"\nReading file {file_path}.\n")
+            self.target_filepath = file_path
+            self.display_plot = False
+            self.warning_widget = False
+            #self.run_calculation()
+            # Set the signal alarm to raise a TimeoutError after 30 seconds
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(30) 
+            try :
+                self.run_calculation()
+                signal.alarm(0)  # Cancel the alarm if the calculation finishes within the time limit
+            except CalculationTimeoutError:
+                # Handle the timeout error
+                print("The calculation took too long to complete.")
+                errors = "Consider the following error(s):\n"
+                information = "The calculation took too long to complete."
+                self.show_dialog(errors, information)
+            except Exception as e:
+                # Traceback the error in a file and avoid shut down
+                errors = "Consider the following error(s):\n"
+                information = traceback.format_exc()
+                self.show_dialog(errors, information)
+            self.export()
+            self.clear()
 
-            # Run the analysis
-            analyse_file(input_file=str(file_path),
-                         output_dir=self.output_dir,
-                         min_num_pts=min_num_points,
-                         min_r2=min_r2,
-                         use_rouq1=use_rouq1,
-                         use_rouq2=use_rouq2,
-                         use_rouq3=use_rouq3,
-                         use_rouq4=use_rouq4,
-                         use_rouq5=use_rouq5,
-                         max_perc_error=max_perc_error,
-                         adsorbate=adsorbate,
-                         cross_sectional_area=cross_sectional_area,
-                         molar_volume=molar_volume)
+        print(f"\nBET analysis on {len(input_file_paths)} input files terminated.")
 
     def set_defaults(self):
         """Sets the widget to default state
@@ -676,9 +682,15 @@ class BETSI_widget(QWidget):
         
         ## check the compatibility for adsorbate
         self.check_adsorbate_compatibility()
-        
+
+        # By default, plots are displayed
+        self.display_plot = True
+
         # if there is a figure, replot
         self.plot_bet()
+
+        # Display warnings
+        self.warning_widget = True
 
     def clear(self):
         """Closes all plots and removes all data from memory"""
@@ -947,6 +959,12 @@ class OutLog(logging.Handler):
         self.out_widget.moveCursor(QtGui.QTextCursor.End)
         self.out_widget.insertPlainText(m)
 
+
+class CalculationTimeoutError(Exception):
+    pass
+
+def timeout_handler(signum, frame):
+    raise CalculationTimeoutError("The calculation timed out.")
 
 def runbetsi():
     QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling, True)

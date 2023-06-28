@@ -107,6 +107,11 @@ Analyse a new isotherm in BETSI by clearing the current plot either via ```Tools
 
 # <img src="docs/images/step-13.png" alt="step-13" style="padding:10px;" width="300"/>
 
+Analyse all isotherms in BETSI by pressing the hotkey combination ```CMD/CTRL+D```. Note that the same parameters defined on the main panel will be used for all calculations. The results can be found in the output directory and the plots are not displayed to avoid overloading the screen.
+
+# <img src="docs/images/step-15.png" alt="step-13" style="padding:10px;" width="400"/>
+
+
 
 ## Test Dataset
 
